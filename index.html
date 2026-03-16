@@ -2,118 +2,132 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meu Mercado Web</title>
-    <script src="https://cdnjs.cloudflare.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scanner de Mercado Pro</title>
+    <!-- Importação da versão estável Quagga2 via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
     <style>
-        * { box-sizing: border-box; font-family: sans-serif; margin: 0; padding: 0; }
-        body { background: #f0f2f5; display: flex; flex-direction: column; height: 100vh; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background: #f4f7f9; color: #333; display: flex; flex-direction: column; height: 100vh; }
         
-        /* Área do Scanner */
-        #scanner-container { width: 100%; height: 40vh; background: #000; position: relative; overflow: hidden; }
-        #scanner-container video { width: 100%; height: 100%; object-fit: cover; }
-        canvas.drawingBuffer { position: absolute; top: 0; left: 0; }
+        /* Área da Câmara Responsiva */
+        #interactive.viewport { width: 100%; height: 300px; background: #000; position: relative; overflow: hidden; }
+        #interactive.viewport video, canvas { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; }
+        
+        .overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; height: 40%; border: 2px solid #00ff00; border-radius: 8px; box-shadow: 0 0 0 1000px rgba(0,0,0,0.5); pointer-events: none; z-index: 10; }
 
-        /* Lista de Compras */
-        .container { flex: 1; padding: 20px; display: flex; flex-direction: column; overflow: hidden; }
-        h2 { margin-bottom: 15px; color: #333; }
-        #lista-compras { flex: 1; overflow-y: auto; background: #fff; border-radius: 8px; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        /* Interface de Carrinho */
+        .app-content { flex: 1; padding: 15px; display: flex; flex-direction: column; overflow: hidden; }
+        .card { background: #fff; border-radius: 12px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; display: flex; flex-direction: column; }
+        .list-items { flex: 1; overflow-y: auto; margin-top: 10px; }
+        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
         
-        .item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; }
-        .item-info { flex: 1; }
-        .qtd-controls { display: flex; align-items: center; gap: 10px; }
-        button.qtd-btn { padding: 5px 10px; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer; }
+        .total-box { background: #007bff; color: white; padding: 20px; border-radius: 0 0 20px 20px; display: flex; justify-content: space-between; align-items: center; }
+        .total-label { font-size: 14px; opacity: 0.9; }
+        .total-price { font-size: 24px; font-weight: bold; }
         
-        /* Rodapé com Total */
-        .total-container { padding: 20px; background: #fff; border-top: 2px solid #007bff; text-align: right; }
-        .total-valor { fontSize: 24px; font-weight: bold; color: #007bff; }
+        .status { text-align: center; font-size: 12px; color: #666; margin-bottom: 5px; }
     </style>
 </head>
 <body>
 
-    <div id="scanner-container"></div>
+    <div id="interactive" class="viewport">
+        <div class="overlay"></div>
+    </div>
 
-    <div class="container">
-        <h2>Carrinho</h2>
-        <div id="lista-compras">
-            <!-- Itens aparecerão aqui -->
+    <div class="app-content">
+        <div class="card">
+            <h3>🛒 Carrinho</h3>
+            <p id="status" class="status">Aguardando leitura...</p>
+            <div id="lista" class="list-items">
+                <!-- Itens aqui -->
+            </div>
         </div>
     </div>
 
-    <div class="total-container">
-        <span>Total da Compra:</span>
-        <div class="total-valor" id="valor-total">R$ 0,00</div>
+    <div class="total-box">
+        <span class="total-label">TOTAL DA COMPRA</span>
+        <span class="total-price" id="total-geral">R$ 0,00</span>
     </div>
 
     <script>
-        let carrinho = [];
+        let carrinho = {};
         const produtosDB = {
-            "7891000000000": { nome: "Exemplo Arroz", preco: 5.50 },
+            "7891000100103": { nome: "Produto Teste 1", preco: 4.50 },
             "5000159459677": { nome: "Coca-Cola 2L", preco: 9.90 }
         };
 
-        // Iniciar o Scanner
-        Quagga.init({
-            inputStream: { name: "Live", type: "LiveStream", target: document.querySelector('#scanner-container') },
-            decoder: { readers: ["ean_reader", "ean_8_reader"] }
-        }, function(err) {
-            if (err) return console.error(err);
-            Quagga.start();
-        });
+        function initScanner() {
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#interactive'),
+                    constraints: {
+                        facingMode: "environment", // Força a câmara traseira
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                },
+                decoder: {
+                    readers: ["ean_reader", "upc_reader", "code_128_reader"] // Formatos comuns de mercado
+                },
+                locate: true
+            }, (err) => {
+                if (err) {
+                    document.getElementById('status').innerText = "Erro ao abrir câmara: " + err;
+                    return;
+                }
+                Quagga.start();
+            });
+        }
 
-        // Quando um código é detectado
-        Quagga.onDetected((data) => {
-            const code = data.codeResult.code;
-            const produto = produtosDB[code] || { nome: `Produto (${code})`, preco: 2.00 }; // Preço padrão se não estiver na DB
+        Quagga.onDetected((result) => {
+            const code = result.codeResult.code;
+            if (!code) return;
+
+            // Feedback visual de leitura
+            document.getElementById('status').innerText = "Último lido: " + code;
             
-            adicionarAoCarrinho(code, produto);
+            const produto = produtosDB[code] || { nome: "Produto " + code, preco: 1.99 };
             
-            // Pausa breve para não ler o mesmo código 50 vezes por segundo
+            if (carrinho[code]) {
+                carrinho[code].qtd += 1;
+            } else {
+                carrinho[code] = { ...produto, qtd: 1 };
+            }
+
+            renderCarrinho();
+            
+            // Pausa de 2 segundos para evitar múltiplas leituras do mesmo objeto
             Quagga.stop();
             setTimeout(() => Quagga.start(), 2000);
         });
 
-        function adicionarAoCarrinho(id, produto) {
-            const index = carrinho.findIndex(i => i.id === id);
-            if (index > -1) {
-                carrinho[index].qtd++;
-            } else {
-                carrinho.push({ ...produto, id, qtd: 1 });
-            }
-            renderizar();
-        }
-
-        function alterarQtd(id, delta) {
-            const index = carrinho.findIndex(i => i.id === id);
-            carrinho[index].qtd += delta;
-            if (carrinho[index].qtd <= 0) carrinho.splice(index, 1);
-            renderizar();
-        }
-
-        function renderizar() {
-            const lista = document.getElementById('lista-compras');
-            lista.innerHTML = '';
+        function renderCarrinho() {
+            const listaDiv = document.getElementById('lista');
+            listaDiv.innerHTML = '';
             let total = 0;
 
-            carrinho.forEach(item => {
+            Object.keys(carrinho).forEach(id => {
+                const item = carrinho[id];
                 total += item.preco * item.qtd;
-                lista.innerHTML += `
-                    <div class="item">
-                        <div class="item-info">
+                listaDiv.innerHTML += `
+                    <div class="item-row">
+                        <div>
                             <strong>${item.nome}</strong><br>
-                            R$ ${item.preco.toFixed(2)}
+                            <small>R$ ${item.preco.toFixed(2)} x ${item.qtd}</small>
                         </div>
-                        <div class="qtd-controls">
-                            <button class="qtd-btn" onclick="alterarQtd('${item.id}', -1)">-</button>
-                            <span>${item.qtd}</span>
-                            <button class="qtd-btn" onclick="alterarQtd('${item.id}', 1)">+</button>
-                        </div>
+                        <strong>R$ ${(item.preco * item.qtd).toFixed(2)}</strong>
                     </div>
                 `;
             });
 
-            document.getElementById('valor-total').innerText = `R$ ${total.toFixed(2)}`;
+            document.getElementById('total-geral').innerText = `R$ ${total.toFixed(2)}`;
         }
+
+        // Iniciar ao carregar
+        window.onload = initScanner;
     </script>
 </body>
 </html>
