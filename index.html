@@ -3,84 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mercado Pro - Leitura Contínua</title>
+    <title>Mercado Pro - Corrigido</title>
     <script src="https://cdn.jsdelivr.net"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
         body { background: #f8f9fa; display: flex; flex-direction: column; height: 100vh; }
         
         /* Scanner */
-        #interactive.viewport { width: 100%; height: 30vh; background: #000; position: relative; }
-        #interactive.viewport video, canvas { width: 100%; height: 100%; object-fit: cover; position: absolute; }
-        .mira { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; height: 2px; background: #ff0000; box-shadow: 0 0 10px #ff0000; z-index: 10; }
+        #interactive.viewport { width: 100%; height: 35vh; background: #000; position: relative; }
+        #interactive.viewport video { width: 100%; height: 100%; object-fit: cover; }
+        canvas { display: none; } /* Esconde o canvas de desenho para performance */
+        
+        /* Botão Inicial Gigante */
+        #btn-start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 35vh; 
+            background: rgba(0,0,0,0.8); color: white; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 100; cursor: pointer; }
 
-        /* Carrinho */
         .app-body { flex: 1; padding: 15px; display: flex; flex-direction: column; overflow: hidden; }
-        .header-carrinho { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .status-msg { text-align: center; padding: 10px; font-weight: bold; color: #007bff; }
         #lista { flex: 1; overflow-y: auto; background: white; border-radius: 10px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         
         .item-row { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; }
-        .status-msg { text-align: center; padding: 10px; font-weight: bold; color: #007bff; min-height: 40px; }
-
-        /* Botões e Footer */
-        .btn-limpar { background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .footer { background: #212529; color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; }
         .total-val { font-size: 26px; font-weight: bold; color: #28a745; }
+        .btn-limpar { background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; }
     </style>
 </head>
 <body>
 
     <div id="interactive" class="viewport">
-        <div class="mira"></div>
+        <div id="btn-start-overlay" onclick="ativarApp()">
+            <span style="font-size: 50px;">📷</span>
+            <b>CLIQUE PARA INICIAR CÂMARA</b>
+        </div>
     </div>
 
     <div class="app-body">
-        <div id="status" class="status-msg">Toque no ecrã para iniciar</div>
-        
-        <div class="header-carrinho">
-            <h3>Itens no Carrinho</h3>
-            <button class="btn-limpar" onclick="limparCarrinho()">Limpar Tudo</button>
+        <div id="status" class="status-msg">Aguardando ativação...</div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+            <h3>Carrinho</h3>
+            <button class="btn-limpar" onclick="limparCarrinho()">Limpar</button>
         </div>
-
-        <div id="lista">
-            <!-- Itens serão listados aqui -->
-        </div>
+        <div id="lista"></div>
     </div>
 
     <div class="footer">
-        <div>TOTAL</div>
-        <div id="total-geral" class="total-val">R$ 0,00</div>
+        <span>TOTAL</span>
+        <span id="total-geral" class="total-val">R$ 0,00</span>
     </div>
 
     <script>
         let carrinho = {};
-        let ultimasLeituras = [];
-        let processando = false; // Bloqueio para evitar duplicados simultâneos
+        let processando = false;
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
         function tocarBeep() {
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
-            osc.frequency.value = 1000;
-            gain.gain.value = 0.1;
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.1);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.frequency.value = 1000; gain.gain.value = 0.1;
+            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
         }
 
-        function initScanner() {
+        async function ativarApp() {
+            // 1. Ativar Áudio
+            if (audioCtx.state === 'suspended') await audioCtx.resume();
+            
+            // 2. Remover Overlay
+            document.getElementById('btn-start-overlay').style.display = 'none';
+            document.getElementById('status').innerText = "A carregar câmara...";
+
+            // 3. Iniciar Quagga
             Quagga.init({
                 inputStream: {
-                    name: "Live", type: "LiveStream",
+                    name: "Live",
+                    type: "LiveStream",
                     target: document.querySelector('#interactive'),
-                    constraints: { facingMode: "environment", focusMode: "continuous" }
+                    constraints: { 
+                        facingMode: "environment",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
                 },
                 decoder: { readers: ["ean_reader", "code_128_reader"] }
             }, (err) => {
-                if (err) return document.getElementById('status').innerText = "Erro: " + err;
+                if (err) {
+                    alert("Erro: " + err);
+                    return;
+                }
                 Quagga.start();
-                document.getElementById('status').innerText = "Câmara Ativa - Pronto para Scan";
+                document.getElementById('status').innerText = "Pronto para ler!";
             });
         }
 
@@ -88,72 +100,42 @@
             const code = result.codeResult.code;
             if (!code || processando) return;
 
-            ultimasLeituras.push(code);
-            if (ultimasLeituras.length >= 3) {
-                const todosIguais = ultimasLeituras.every(v => v === ultimasLeituras[0]);
-                if (todosIguais) {
-                    adicionarAoCarrinho(ultimasLeituras[0]);
-                    ultimasLeituras = [];
-                } else {
-                    ultimasLeituras.shift();
-                }
-            }
-        });
-
-        function adicionarAoCarrinho(code) {
-            processando = true; // Pausa lógica
+            processando = true;
             tocarBeep();
             
-            const precoFicticio = 7.50;
-            const nome = "Produto " + code.slice(-5);
+            const nome = "Item " + code.slice(-4);
+            const preco = 5.00;
 
             if (carrinho[code]) {
                 carrinho[code].qtd++;
             } else {
-                carrinho[code] = { nome, preco: precoFicticio, qtd: 1 };
+                carrinho[code] = { nome, preco, qtd: 1 };
             }
 
-            document.getElementById('status').innerText = "✅ " + nome + " adicionado!";
+            document.getElementById('status').innerText = "✅ " + nome + " OK";
             render();
 
-            // Breve intervalo para o utilizador afastar o produto e ler outro
-            setTimeout(() => {
-                processando = false;
+            setTimeout(() => { 
+                processando = false; 
                 document.getElementById('status').innerText = "Pronto para o próximo...";
-            }, 1500);
-        }
-
-        function limparCarrinho() {
-            if(confirm("Deseja limpar todos os itens?")) {
-                carrinho = {};
-                render();
-                document.getElementById('status').innerText = "Carrinho Vazio";
-            }
-        }
+            }, 2000);
+        });
 
         function render() {
             const listaDiv = document.getElementById('lista');
             listaDiv.innerHTML = '';
             let total = 0;
-
-            Object.keys(carrinho).forEach(id => {
-                const item = carrinho[id];
+            Object.values(carrinho).forEach(item => {
                 total += item.preco * item.qtd;
-                listaDiv.innerHTML += `
-                    <div class="item-row">
-                        <span>${item.nome} <strong>(x${item.qtd})</strong></span>
-                        <span>R$ ${(item.preco * item.qtd).toFixed(2)}</span>
-                    </div>`;
+                listaDiv.innerHTML += `<div class="item-row"><span>${item.nome} (x${item.qtd})</span><strong>R$ ${(item.preco * item.qtd).toFixed(2)}</strong></div>`;
             });
             document.getElementById('total-geral').innerText = `R$ ${total.toFixed(2)}`;
         }
 
-        // Início por interação (correção para browsers mobile)
-        document.body.addEventListener('click', () => {
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            if (!document.querySelector('video')) initScanner();
-        }, { once: true });
+        function limparCarrinho() {
+            carrinho = {};
+            render();
+        }
     </script>
 </body>
 </html>
-
