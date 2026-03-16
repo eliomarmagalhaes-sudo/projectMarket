@@ -3,27 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project Market</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/quaggaJS/0.12.1/quagga.min.js"></script> <!-- Corrected Quagga.js library URL -->
+    <title>Barcode Scanner</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quaggaJS/0.12.1/quagga.min.js"></script>
+    <style>
+        /* Add your CSS styling here */
+    </style>
 </head>
 <body>
-    <h1>Welcome to Project Market</h1>
+    <h1>Barcode Scanner</h1>
+    <div id="scanner-container"></div>
     <script>
-        // Error handling for Quagga.js
-        try {
-            Quagga.init({
-                inputStream: { /*...*/ },
-                decoder: { /*...*/ }
-            }, function(err) {
-                if (err) {
-                    console.error('Error initializing Quagga:', err);
-                    return;
-                }
-                console.log('Quagga initialized successfully');
-            });
-        } catch (error) {
-            console.error('An unexpected error occurred:', error);
-        }
+        // Initialize the barcode scanner
+        Quagga.init({
+            inputStream : {
+                name : "Live",
+                type : "LiveStream",
+                target: document.querySelector('#scanner-container'), // Or '#yourElement' (optional)
+            },
+            decoder : {
+                readers : ["code_128_reader"] // List of active readers
+            }
+        }, function(err) {
+            if (err) {
+                console.error(err);
+                return;
+            }
+            console.log("Initialization finished. Ready to start" );
+            Quagga.start();
+        });
+
+        // Event listener for detected codes
+        Quagga.onDetected(function(data) {
+            console.log(data);
+            // Handle the detected code here
+        });
     </script>
 </body>
-</html> 
+</html>
