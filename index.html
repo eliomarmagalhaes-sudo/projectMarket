@@ -3,40 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barcode Scanner</title>
+    <title>Project Market</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quaggaJS/0.12.1/quagga.min.js"></script>
-    <style>
-        /* Add your CSS styling here */
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h1>Barcode Scanner</h1>
     <div id="scanner-container"></div>
+    <div id="cart"></div>
+    <div id="total"></div>
     <script>
-        // Initialize the barcode scanner
+        // JavaScript logic for barcode scanning
+        // Initialize Quagga.js scanner
         Quagga.init({
             inputStream : {
-                name : "Live",
+                name : "LiveStream",
                 type : "LiveStream",
-                target: document.querySelector('#scanner-container'), // Or '#yourElement' (optional)
+                target: document.querySelector('#scanner-container') // the HTML element to use for the video
             },
             decoder : {
-                readers : ["code_128_reader"] // List of active readers
+                readers : ["code_128_reader"] // list of active readers
             }
         }, function(err) {
             if (err) {
-                console.error(err);
+                console.log(err);
                 return;
             }
             console.log("Initialization finished. Ready to start" );
             Quagga.start();
         });
 
-        // Event listener for detected codes
-        Quagga.onDetected(function(data) {
-            console.log(data);
-            // Handle the detected code here
-        });
+        // Additional cart system and total calculation logic
+        // ...
+
     </script>
 </body>
 </html>
